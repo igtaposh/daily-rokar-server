@@ -28,10 +28,10 @@ The API provides account registration and email verification, authentication, pr
 - Hash passwords before storing them.
 - Verify an email address with a six-digit, time-limited email code.
 - Authenticate with a signed JSON Web Token (JWT), returned in the login response and set as an HTTP-only cookie.
-- Renew an authenticated session for another 24 hours.
 - Read and update account details, change passwords, and deactivate an account.
 - Record sales and expenses with a description, category, amount, and cash/online payment method.
 - Update the user's cash or online Rokar balance when a sale or expense is created.
+- Update the user's AEPS balance when an AEPS withdrawal or deposit is created.
 - Query sales and expenses for a date range.
 - Create, list, and delete AEPS transactions, with optional date filtering when listing.
 - Limit verification-code send requests to four per five minutes per client.
@@ -135,7 +135,7 @@ Authorization: Bearer <token>
 
 or the `token` cookie.
 
-JWTs expire after **24 hours**. The protected `POST /user/refresh-token` route issues a fresh 24-hour token. Protected endpoints also check that the user still exists, has a verified email, and is active.
+JWTs expire after **24 hours**. Sign in again after a token expires. Protected endpoints also check that the user still exists, has a verified email, and is active.
 
 ## API reference
 
@@ -152,7 +152,6 @@ API_BASE=http://localhost:3000/v1/api
 | `POST` | `/user/sign-up` | No | Register an account. |
 | `POST` | `/user/login` | No | Verify credentials and start a session. |
 | `POST` | `/user/logout` | No | Clear the authentication cookie. |
-| `POST` | `/user/refresh-token` | Yes | Issue a new 24-hour token. |
 | `GET` | `/user` | Yes | Fetch the current profile. |
 | `PATCH` | `/user/update` | Yes | Update name, shop name, or password. |
 | `PATCH` | `/user/update-password` | No | Change a password using email and a new password. |
@@ -204,7 +203,7 @@ Content-Type: application/json
 }
 ```
 
-#### Login and refresh a session
+#### Login
 
 ```http
 POST /v1/api/user/login
@@ -220,10 +219,6 @@ Content-Type: application/json
 
 A successful response contains `user` and `token`; a cookie is also set. Use the token as a Bearer token or allow the HTTP-only cookie to be sent with subsequent requests.
 
-```http
-POST /v1/api/user/refresh-token
-Authorization: Bearer <token>
-```
 
 #### Profile and account actions
 
@@ -297,7 +292,7 @@ Date bounds are inclusive and interpreted in India Standard Time (`+05:30`). Eit
 
 | Method | Path | Auth required | Purpose |
 | --- | --- | --- | --- |
-| `POST` | `/aeps/add` | Yes | Create an AEPS transaction. |
+| `POST` | `/aeps/add` | Yes | Create an AEPS transaction and update the corresponding user balance. |
 | `GET` | `/aeps/all` | Yes | List AEPS transactions; supports `startDate` and `endDate`. |
 | `DELETE` | `/aeps/delete/:transactionId` | Yes | Delete one of the authenticated user's AEPS transactions. |
 
@@ -318,7 +313,7 @@ Content-Type: application/json
 }
 ```
 
-The current API requires a name and positive amount; if an Aadhaar number is provided, it must contain 12 characters. `type` is stored as the transaction type and defaults to `withdrawal` in the model.
+The API requires a name, a positive amount, and a transaction type of `withdrawal` or `deposit`; if an Aadhaar number is provided, it must contain 12 characters. `type` defaults to `withdrawal`. Creating a withdrawal adds the amount to `user.aepsOnline`, while creating a deposit adds it to `user.aeps`. The successful response includes the created transaction and updated AEPS balances.
 
 List AEPS transactions for a date range:
 
@@ -378,6 +373,17 @@ When a sale or expense is created:
 
 The balance update is performed by the backend. If saving the new record fails, the backend attempts to roll the balance change back. The successful create response includes the created record and the updated Rokar balances.
 
+### AEPS balance behavior
+
+When an AEPS transaction is created:
+
+| Transaction type | Balance change |
+| --- | --- |
+| Withdrawal | Add amount to `user.aepsOnline`. |
+| Deposit | Add amount to `user.aeps`. |
+
+The backend attempts to roll back the balance change if saving the transaction fails. Deleting an AEPS transaction does not currently reverse its balance change.
+
 ## Error responses
 
 Validation and authentication failures generally include an HTTP error status and JSON with a `message` and `success: false`. Common statuses include:
@@ -402,7 +408,7 @@ This repository does not implement subscriptions, payment collection, usage mete
 
 - `npm test` is a placeholder; no automated backend tests are configured.
 - No dedicated health endpoint or API documentation/OpenAPI schema is configured.
-- Deleting a sales/expense record currently does not reverse the corresponding user balance adjustment. Similarly, AEPS create/delete operations currently do not modify `aeps` or `aepsOnline`.
+- Deleting a sales/expense record or AEPS transaction currently does not reverse the corresponding user balance adjustment.
 - Existing transactions are not automatically backfilled into user balance fields.
 - The unauthenticated password-change route should be reviewed and protected with an appropriate verification flow before production use.
 - Email delivery uses a Resend test sender in code and requires production sender configuration.

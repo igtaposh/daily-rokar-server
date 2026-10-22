@@ -308,7 +308,8 @@ export const userEmailVerification = async (req, res) => {
 };
 
 export const userUpdate = async (req, res) => {
-  const { name, shopName, password } = req.body ?? {};
+  const { name, shopName, password, rokar, rokarOnline, aeps, aepsOnine } =
+    req.body ?? {};
   const userId = req.user?.id;
 
   try {
@@ -356,6 +357,47 @@ export const userUpdate = async (req, res) => {
     }
 
     // Validate and compare shop name
+    if (rokar !== undefined) {
+      if (typeof rokar !== Number || rokar.length <= 0) {
+        return res.status(400).json({
+          message: "Enter a valid Amount",
+          success: false,
+        });
+      }
+
+      updates.rokar = rokar;
+    }
+    if (rokarOnline !== undefined) {
+      if (typeof rokarOnline !== Number || rokarOnline.length <= 0) {
+        return res.status(400).json({
+          message: "Enter a valid Amount",
+          success: false,
+        });
+      }
+
+      updates.rokarOnline = rokarOnline;
+    }
+    if (aeps !== undefined) {
+      if (typeof aeps !== Number || aeps.length <= 0) {
+        return res.status(400).json({
+          message: "Enter a valid Amount",
+          success: false,
+        });
+      }
+
+      updates.aeps = aeps;
+    }
+    if (aepsOnine !== undefined) {
+      if (typeof aepsOnine !== Number || aepsOnine.length <= 0) {
+        return res.status(400).json({
+          message: "Enter a valid Amount",
+          success: false,
+        });
+      }
+
+      updates.aepsOnine = aepsOnine;
+    }
+
     if (shopName !== undefined) {
       if (
         typeof shopName !== "string" ||
@@ -380,7 +422,6 @@ export const userUpdate = async (req, res) => {
 
       updates.shopName = trimmedShopName;
     }
-
     // Validate and compare password
     if (password !== undefined) {
       if (
@@ -430,69 +471,6 @@ export const userUpdate = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       message: "Unable to update user details.",
-      success: false,
-    });
-  }
-};
-
-export const refreshUserToken = async (req, res) => {
-  try {
-    if (!process.env.JWT_SECRET) {
-      return res.status(500).json({
-        message: "Authentication is not configured.",
-        success: false,
-      });
-    }
-
-    const user = await User.findById(req.user.id).select("-password");
-    if (!user || !user.isActive || !user.isEmailVerified) {
-      return res.status(401).json({
-        message: "Please sign in again to continue.",
-        success: false,
-      });
-    }
-
-    const token = jwt.sign(
-      {
-        id: user._id,
-        name: user.name,
-        shopName: user.shopName,
-        email: user.email,
-        isActive: user.isActive,
-        isEmailVerified: user.isEmailVerified,
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" },
-    );
-
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 24 * 60 * 60 * 1000,
-    });
-
-    return res.status(200).json({
-      message: "Session renewed successfully.",
-      success: true,
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        shopName: user.shopName,
-        email: user.email,
-        rokar: user.rokar,
-        rokarOnline: user.rokarOnline,
-        aeps: user.aeps,
-        aepsOnline: user.aepsOnline,
-        isEmailVerified: user.isEmailVerified,
-        isActive: user.isActive,
-      },
-    });
-  } catch (error) {
-    console.error("Unable to renew user session:", error);
-    return res.status(500).json({
-      message: "Unable to renew your session. Please try again.",
       success: false,
     });
   }

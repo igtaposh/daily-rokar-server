@@ -1,4 +1,5 @@
 import AepsModel from "../models/AepsModel.js";
+import UserModel from "../models/UserModel.js";
 
 export const createTransaction = async (req, res) => {
   const userId = req.user.id;
@@ -24,43 +25,78 @@ export const createTransaction = async (req, res) => {
         success: false,
       });
     }
-    if (!amount) {
-      return res.status(400).json({
-        message: "Please enter a valid amount",
-        success: false,
-      });
-    }
-    if (amount <= 0) {
+    const transactionAmount = Number(amount);
+    if (!Number.isFinite(transactionAmount) || transactionAmount <= 0) {
       return res.status(400).json({
         message: "Please enter a valid amount.",
         success: false,
       });
     }
 
-    if (type) {
-      if (type.trim().length < 3) {
-        return res.status(400).json({
-          message: "Please enter a valid transaction method.",
-          success: false,
-        });
-      }
+    const normalizedType =
+      type === undefined
+        ? "withdrawal"
+        : typeof type === "string"
+          ? type.trim().toLowerCase()
+          : "";
+    if (!["withdrawal", "deposit"].includes(normalizedType)) {
+      return res.status(400).json({
+        message: "Transaction type must be withdrawal or deposit.",
+        success: false,
+      });
     }
 
     const newAEPS = new AepsModel({
       userId: userId.trim(),
-      type,
-      amount,
+      type: normalizedType,
+      amount: transactionAmount,
       name,
       adharNumber,
     });
 
-    await newAEPS.save();
+    const balanceField =
+      normalizedType === "withdrawal" ? "aepsOnline" : "aeps";
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      { $inc: { [balanceField]: transactionAmount } },
+      { new: true, projection: { aeps: 1, aepsOnline: 1 } },
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        message: "User not found.",
+        success: false,
+      });
+    }
+
+    try {
+      await newAEPS.save();
+    } catch (error) {
+      try {
+        await UserModel.updateOne(
+          { _id: userId },
+          { $inc: { [balanceField]: -transactionAmount } },
+        );
+      } catch (rollbackError) {
+        console.error(
+          "Failed to roll back balance after AEPS transaction creation error:",
+          rollbackError,
+        );
+      }
+      throw error;
+    }
+
     return res.status(201).json({
       message: "AEPS transation created successfully.",
       success: true,
+      newAEPS,
+      user: {
+        aeps: updatedUser.aeps,
+        aepsOnline: updatedUser.aepsOnline,
+      },
     });
   } catch (error) {
-    console.log(error);
+    console.error("Unable to create AEPS transaction:", error);
     return res.status(500).json({
       message: "Unable to create any AEPS transation.",
       success: false,

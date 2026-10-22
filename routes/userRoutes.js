@@ -9,7 +9,6 @@ import {
   userUpdate,
   verifyOtp,
   userLogout,
-  refreshUserToken,
   changePassword,
 } from "../controllers/userControllers.js";
 import { routeProtector } from "../middleware/routeProtector.js";
@@ -20,7 +19,7 @@ const router = express.Router();
 router.post("/sign-up", registerUser);
 router.post("/login", userLogin);
 router.post("/logout", userLogout);
-router.post("/refresh-token", routeProtector, refreshUserToken);
+
 router.get("/", routeProtector, getUserData);
 router.patch("/update", routeProtector, userUpdate);
 router.patch("/update-password", changePassword);

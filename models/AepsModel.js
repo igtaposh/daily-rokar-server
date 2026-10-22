@@ -18,6 +18,7 @@ const AepsSchema = new mongoose.Schema(
     type: {
       type: String,
       default: "withdrawal",
+      enum: ["withdrawal", "deposit"],
     },
     amount: {
       type: Number,
