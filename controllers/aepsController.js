@@ -159,20 +159,52 @@ export const deleteTransaction = async (req, res) => {
         .json({ message: "Invalid transaction id", success: false });
     }
 
-    const deletedTransaction = await AepsModel.findOneAndDelete({
+    const transaction = await AepsModel.findOne({
       _id: transactionId,
       userId,
     });
-    if (!deletedTransaction) {
+
+    if (!transaction) {
       return res
         .status(400)
         .json({ message: "Aeps transaction not found.", success: false });
     }
-    return res.status(200).json({
-      message: "Aeps transaction deleted successfully.",
-      success: true,
-    });
+
+    const balanceField =
+      transaction.type === "withdrawal" ? "aepsOnline" : "aeps";
+
+    try {
+      await AepsModel.deleteOne({ _id: transactionId, userId });
+      const updatedUser = await UserModel.findByIdAndUpdate(
+        userId,
+        { $inc: { [balanceField]: -transaction.amount } },
+        { new: true, projection: { aeps: 1, aepsOnline: 1 } },
+      );
+
+      if (!updatedUser) {
+        return res.status(404).json({
+          message: "User not found.",
+          success: false,
+        });
+      }
+
+      return res.status(200).json({
+        message: "Aeps transaction deleted successfully.",
+        success: true,
+        user: {
+          aeps: updatedUser.aeps,
+          aepsOnline: updatedUser.aepsOnline,
+        },
+      });
+    } catch (error) {
+      await UserModel.updateOne(
+        { _id: userId },
+        { $inc: { [balanceField]: transaction.amount } },
+      );
+      throw error;
+    }
   } catch (error) {
+    console.error("Unable to delete AEPS transaction:", error);
     return res
       .status(500)
       .json({ message: "Unable to delete any transaction.", success: false });

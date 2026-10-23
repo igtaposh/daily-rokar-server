@@ -64,9 +64,9 @@ export const createRecord = async (req, res) => {
       amount: recordAmount,
       type: normalizedType,
     });
-    const amountDelta = normalizedType === "sale" ? recordAmount : -recordAmount;
-    const balanceField =
-      normalizedPayment === "cash" ? "rokar" : "rokarOnline";
+    const amountDelta =
+      normalizedType === "sale" ? recordAmount : -recordAmount;
+    const balanceField = normalizedPayment === "cash" ? "rokar" : "rokarOnline";
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
       { $inc: { [balanceField]: amountDelta } },
@@ -124,28 +124,56 @@ export const deleteRecord = async (req, res) => {
         .status(401)
         .json({ message: "Unauthorized user", success: false });
     }
+
     if (!recordId) {
       return res
         .status(400)
         .json({ message: "Invalid record id", success: false });
     }
 
-    const deletedRecord = await RecordModel.findOneAndDelete({
-      _id: recordId,
-      userId,
-    });
+    const record = await RecordModel.findOne({ _id: recordId, userId });
 
-    if (!deletedRecord) {
+    if (!record) {
       return res
         .status(400)
         .json({ message: "Record not found.", success: false });
     }
 
-    return res.status(200).json({
-      message: "Record deleted successfully.",
-      success: true,
-    });
+    const balanceField = record.payment === "Cash" ? "rokar" : "rokarOnline";
+    const amountDelta = record.type === "sale" ? -record.amount : record.amount;
+
+    try {
+      await RecordModel.deleteOne({ _id: recordId, userId });
+      const updatedUser = await UserModel.findByIdAndUpdate(
+        userId,
+        { $inc: { [balanceField]: amountDelta } },
+        { new: true, projection: { rokar: 1, rokarOnline: 1 } },
+      );
+
+      if (!updatedUser) {
+        return res.status(404).json({
+          message: "User not found.",
+          success: false,
+        });
+      }
+
+      return res.status(200).json({
+        message: "Record deleted successfully.",
+        success: true,
+        user: {
+          rokar: updatedUser.rokar,
+          rokarOnline: updatedUser.rokarOnline,
+        },
+      });
+    } catch (error) {
+      await UserModel.updateOne(
+        { _id: userId },
+        { $inc: { [balanceField]: -amountDelta } },
+      );
+      throw error;
+    }
   } catch (error) {
+    console.error("Unable to delete record:", error);
     return res
       .status(500)
       .json({ message: "Unable to delete any records.", success: false });
