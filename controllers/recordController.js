@@ -17,9 +17,9 @@ export const createRecord = async (req, res) => {
         success: false,
       });
     }
-    if (description.trim().length < 3 || description.trim().length > 20) {
+    if (description.trim().length < 3 || description.trim().length > 50) {
       return res.status(400).json({
-        message: "Description must be between 3 and 20 characters long",
+        message: "Description must be between 3 and 50 characters long",
         success: false,
       });
     }

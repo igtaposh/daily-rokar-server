@@ -5,6 +5,8 @@ import connectDB from "./config/db.js";
 import userRoutes from "./routes/userRoutes.js";
 import recordRoutes from "./routes/recordRoutes.js";
 import aepsRoutes from "./routes/aepsRoutes.js";
+import ledgerRoutes from "./routes/ledgerRoutes.js";
+import customerRoutes from "./routes/customerRoutes.js";
 import cors from "cors";
 
 const app = express();
@@ -25,6 +27,8 @@ app.use(cors(corsOptions));
 app.use("/v1/api/user", userRoutes);
 app.use("/v1/api/record", recordRoutes);
 app.use("/v1/api/aeps", aepsRoutes);
+app.use("/v1/api/ledger", ledgerRoutes);
+app.use("/v1/api/customer", customerRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found", success: false });
