@@ -54,11 +54,13 @@ export const createTransaction = async (req, res) => {
       adharNumber,
     });
 
-    const balanceField =
-      normalizedType === "withdrawal" ? "aepsOnline" : "aeps";
+    const balanceChanges =
+      normalizedType === "withdrawal"
+        ? { aeps: -transactionAmount, aepsOnline: transactionAmount }
+        : { aeps: transactionAmount, aepsOnline: -transactionAmount };
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
-      { $inc: { [balanceField]: transactionAmount } },
+      { $inc: balanceChanges },
       { new: true, projection: { aeps: 1, aepsOnline: 1 } },
     );
 
@@ -75,7 +77,12 @@ export const createTransaction = async (req, res) => {
       try {
         await UserModel.updateOne(
           { _id: userId },
-          { $inc: { [balanceField]: -transactionAmount } },
+          {
+            $inc: {
+              aeps: -balanceChanges.aeps,
+              aepsOnline: -balanceChanges.aepsOnline,
+            },
+          },
         );
       } catch (rollbackError) {
         console.error(
@@ -170,14 +177,23 @@ export const deleteTransaction = async (req, res) => {
         .json({ message: "Aeps transaction not found.", success: false });
     }
 
-    const balanceField =
-      transaction.type === "withdrawal" ? "aepsOnline" : "aeps";
+    const normalizedType = transaction.type?.trim().toLowerCase();
+    if (!["withdrawal", "deposit"].includes(normalizedType)) {
+      return res.status(400).json({
+        message: "Invalid transaction type. Cannot safely reverse balance.",
+        success: false,
+      });
+    }
+
+    const balanceChanges =
+      normalizedType === "withdrawal"
+        ? { aeps: transaction.amount, aepsOnline: -transaction.amount }
+        : { aeps: -transaction.amount, aepsOnline: transaction.amount };
 
     try {
-      await AepsModel.deleteOne({ _id: transactionId, userId });
       const updatedUser = await UserModel.findByIdAndUpdate(
         userId,
-        { $inc: { [balanceField]: -transaction.amount } },
+        { $inc: balanceChanges },
         { new: true, projection: { aeps: 1, aepsOnline: 1 } },
       );
 
@@ -187,6 +203,8 @@ export const deleteTransaction = async (req, res) => {
           success: false,
         });
       }
+
+      await AepsModel.deleteOne({ _id: transactionId, userId });
 
       return res.status(200).json({
         message: "Aeps transaction deleted successfully.",
@@ -199,7 +217,12 @@ export const deleteTransaction = async (req, res) => {
     } catch (error) {
       await UserModel.updateOne(
         { _id: userId },
-        { $inc: { [balanceField]: transaction.amount } },
+        {
+          $inc: {
+            aeps: -balanceChanges.aeps,
+            aepsOnline: -balanceChanges.aepsOnline,
+          },
+        },
       );
       throw error;
     }
