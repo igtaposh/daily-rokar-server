@@ -5,6 +5,7 @@ import connectDB from "./config/db.js";
 import userRoutes from "./routes/userRoutes.js";
 import recordRoutes from "./routes/recordRoutes.js";
 import aepsRoutes from "./routes/aepsRoutes.js";
+import cashManagementRoutes from "./routes/cashManagementRoutes.js";
 import ledgerRoutes from "./routes/ledgerRoutes.js";
 import customerRoutes from "./routes/customerRoutes.js";
 import cors from "cors";
@@ -27,6 +28,7 @@ app.use(cors(corsOptions));
 app.use("/v1/api/user", userRoutes);
 app.use("/v1/api/record", recordRoutes);
 app.use("/v1/api/aeps", aepsRoutes);
+app.use("/v1/api/cms", cashManagementRoutes);
 app.use("/v1/api/ledger", ledgerRoutes);
 app.use("/v1/api/customer", customerRoutes);
 
