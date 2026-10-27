@@ -119,13 +119,6 @@ export const fetchAllCustomers = async (req, res) => {
 
     const customers = await CustomerModel.find({ userId });
 
-    if (customers.length === 0) {
-      return res.status(404).json({
-        message: "Failed to find any customer.",
-        success: false,
-      });
-    }
-
     return res.status(200).json({
       message: "All customers fetched successfully.",
       success: true,
@@ -157,7 +150,6 @@ export const updateCustomer = async (req, res) => {
       });
     }
 
-    const customerName = await CustomerModel.findOne({ name, userId });
     const updates = {};
 
     // Name validation
@@ -168,7 +160,12 @@ export const updateCustomer = async (req, res) => {
           success: false,
         });
       }
-      if (customerName) {
+      const existingCustomer = await CustomerModel.findOne({
+        _id: { $ne: customerId },
+        name: name.trim(),
+        userId,
+      });
+      if (existingCustomer) {
         return res.status(400).json({
           message: "Customer already exist. Please any different name",
           success: false,

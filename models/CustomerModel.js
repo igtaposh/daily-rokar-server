@@ -20,7 +20,7 @@ const CustomerSchema = new mongoose.Schema(
     address: {
       type: String,
     },
-    amountBalace: {
+    amountBalance: {
       type: Number,
       default: 0,
     },

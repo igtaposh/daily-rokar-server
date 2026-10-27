@@ -185,6 +185,86 @@ export const createLedger = async (req, res) => {
   }
 };
 export const allLedgers = async (req, res) => {
+  const userId = req.user?.id;
+  try {
+    if (!userId) {
+      return res
+        .status(401)
+        .json({ message: "Unauthorized user", success: false });
+    }
+
+    let { startDate, endDate } = req.query;
+    if (!startDate && !endDate) {
+      const todayParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(new Date());
+      const today = Object.fromEntries(
+        todayParts
+          .filter((part) => part.type !== "literal")
+          .map(({ type, value }) => [type, value]),
+      );
+      startDate = `${today.year}-${today.month}-${today.day}`;
+      endDate = startDate;
+    }
+
+    const isValidDate = (date) => {
+      if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return false;
+      }
+      const parsedDate = new Date(`${date}T00:00:00.000Z`);
+      return (
+        Number.isFinite(parsedDate.getTime()) &&
+        parsedDate.toISOString().slice(0, 10) === date
+      );
+    };
+
+    if (
+      (startDate && !isValidDate(startDate)) ||
+      (endDate && !isValidDate(endDate))
+    ) {
+      return res.status(400).json({
+        message: "Dates must use the YYYY-MM-DD format.",
+        success: false,
+      });
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+      return res.status(400).json({
+        message: "Start date must be on or before end date.",
+        success: false,
+      });
+    }
+
+    const filter = { userId, createdAt: {} };
+    if (startDate) {
+      filter.createdAt.$gte = new Date(
+        `${startDate}T00:00:00.000+05:30`,
+      );
+    }
+    if (endDate) {
+      const nextDay = new Date(`${endDate}T00:00:00.000+05:30`);
+      nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+      filter.createdAt.$lt = nextDay;
+    }
+
+    const ledgers = await LedgerModel.find(filter).sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      message: "Ledgers fetched successfully.",
+      success: true,
+      ledgers,
+    });
+  } catch (error) {
+    console.error("Unable to fetch ledgers:", error);
+    return res
+      .status(500)
+      .json({ message: "Internal server error.", success: false });
+  }
+};
+export const ledgerCustomerWise = async (req, res) => {
   const { customerId } = req.params;
   const userId = req.user.id;
   try {
@@ -239,16 +319,19 @@ export const deleteLedger = async (req, res) => {
         .status(404)
         .json({ message: "Ledger not found.", success: false });
     }
-    const amount =
+    const balanceChange =
       deletedLedger.type === "credit"
-        ? deletedLedger.amount
-        : -deletedLedger.amount;
+        ? -deletedLedger.amount
+        : deletedLedger.amount;
     await CustomerModel.findOneAndUpdate(
       {
         _id: deletedLedger.customerId,
         userId,
       },
-      { $inc: { amountBalance: amount } },
+      {
+        $inc: { amountBalance: balanceChange },
+        $pull: { ledgers: deletedLedger._id },
+      },
       {
         new: true,
         runValidators: true,
